@@ -15,7 +15,7 @@ if __name__ == '__main__':
         sys.path.insert(0, project_root)
 
 from segmentation_models.unet import Unet
-from isegmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
+from segmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
 
 
 def load_data(path, im_shape):
