@@ -1,3 +1,6 @@
+import os
+from os.path import dirname, join, abspath
+import sys
 import h5py
 import keras
 import numpy as np
@@ -5,8 +8,14 @@ import tensorflow as tf
 from keras import backend as K
 from skimage import transform
 from keras.callbacks import ModelCheckpoint
-from segmentation_models import Unet
-from segmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
+
+if __name__ == '__main__':
+        project_root = dirname(dirname(dirname(abspath(__file__))))
+        print(project_root)
+        sys.path.insert(0, project_root)
+
+from segmentation_models.unet import Unet
+from isegmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
 
 
 def load_data(path, im_shape):
@@ -74,14 +83,17 @@ def bce_dice_loss(y_true, y_pred):
     return 0.5 * keras.losses.binary_crossentropy(y_true, y_pred) - dice_coef(y_true, y_pred)
 
 
+# train on device 8
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+
 # train:validation:test, 7:2:1 here
 traind = 7
 vald = 2
 
 # prepare data
 x, y = load_data(
-    "C:/Users/edwardyangxin/Desktop/workprojs/segmentation_models/segmentation_models/dataset/jia_jsrt_1k.hdf5", 256)
-x = x[:100]
+    "/home/ycli/code/segmentation_models/segmentation_models/dataset/jia_jsrt_1k.hdf5", 256)
+x = x
 x = np.stack([x] * 3, axis=-1)
 x_train, y_train, x_val, y_val, x_test, y_test = split_data(x, y, 0, traind, vald)
 
