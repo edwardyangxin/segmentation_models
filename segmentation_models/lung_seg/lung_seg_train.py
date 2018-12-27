@@ -17,7 +17,7 @@ if __name__ == '__main__':
 from segmentation_models.unet import Unet
 from segmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
 
-
+# todo: move training code to tm_model,
 def load_data(path, im_shape):
     """This function loads data from hdf5 file"""
     X = []
