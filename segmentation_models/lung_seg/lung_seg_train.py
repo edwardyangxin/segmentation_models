@@ -9,6 +9,10 @@ import tensorflow as tf
 from keras import backend as K
 from keras.callbacks import ModelCheckpoint
 from skimage import transform
+import cv2
+import matplotlib.pyplot as plt
+
+plt.style.use('seaborn-white')
 
 from segmentation_models.lung_seg.image_generator_keras import ImageDataGenerator
 
@@ -26,19 +30,19 @@ def load_data(path, im_shape):
     X = []
     y = []
     with h5py.File(path, "r") as f:
-        img_names = f["img_id/img"]
+        img_names = f["img_id/img_id"]
         images = f["img/img"]
         masks = f["mask/mask"]
 
         for idx, name in enumerate(img_names):
             img = images[idx]
             img = np.squeeze(img)
-            img = transform.resize(img, (im_shape, im_shape))
+            img =cv2.resize(img, (im_shape, im_shape), interpolation=cv2.INTER_AREA)
             X.append(img)
 
             mask = masks[idx]
             mask = np.squeeze(mask)
-            mask = transform.resize(mask, (im_shape, im_shape))
+            # mask = transform.resize(mask, (im_shape, im_shape))
             mask = np.expand_dims(mask, -1)
             y.append(mask)
 
@@ -98,6 +102,19 @@ dataset_path = "C:/Users/edwardyangxin/Desktop/workprojs/segmentation_models/seg
 # prepare data
 x, y = load_data(dataset_path, input_size)
 
+# plot 4 pairs of data
+for i in range(1, 5):
+    index = i * 2 - 1
+    plt.subplot(4, 2, index)
+    xx = x[i - 1, :, :]
+    plt.imshow(xx.squeeze())
+
+    index = i * 2
+    plt.subplot(4, 2, index)
+    yy = y[i - 1, :, :]
+    plt.imshow(yy.squeeze())
+plt.show()
+
 x = x
 x = np.stack([x] * 3, axis=-1)
 x_train, y_train, x_val, y_val, x_test, y_test = split_data(x, y, 0, traind, vald)
@@ -110,23 +127,23 @@ model_file_format = 'weights.{epoch:02d}-{val_mean_iou:.3f}-{val_binary_accuracy
 checkpointer = ModelCheckpoint(model_file_format, monitor='val_mean_iou', period=1)
 
 batch_size = 8
-# model.fit(x_train, y_train, epochs=100, callbacks=[checkpointer], batch_size=8, validation_data=(x_val, y_val))
+model.fit(x_train, y_train, epochs=100, callbacks=[checkpointer], batch_size=8, validation_data=(x_val, y_val))
 
-train_gen = ImageDataGenerator(rotation_range=10,
-                               width_shift_range=0.1,
-                               height_shift_range=0.1,
-                               rescale=1.,
-                               zoom_range=0.2,
-                               fill_mode='nearest',
-                               cval=0,
-                               data_format='channels_last')
-test_gen = ImageDataGenerator(rescale=1.)
-# train model
-batch_size = 8
-steps = (x_train.shape[0] - batch_size + 1) // batch_size
-model.fit_generator(train_gen.flow(x_train, y_train, batch_size),
-                    steps_per_epoch=steps,
-                    epochs=100,
-                    callbacks=[checkpointer],
-                    validation_data=test_gen.flow(x_val, y_val),
-                    validation_steps=1)
+# train_gen = ImageDataGenerator(rotation_range=10,
+#                                width_shift_range=0.1,
+#                                height_shift_range=0.1,
+#                                rescale=1.,
+#                                zoom_range=0.2,
+#                                fill_mode='nearest',
+#                                cval=0,
+#                                data_format='channels_last')
+# test_gen = ImageDataGenerator(rescale=1.)
+# # train model
+# batch_size = 8
+# steps = (x_train.shape[0] - batch_size + 1) // batch_size
+# model.fit_generator(train_gen.flow(x_train, y_train, batch_size),
+#                     steps_per_epoch=steps,
+#                     epochs=100,
+#                     callbacks=[checkpointer],
+#                     validation_data=test_gen.flow(x_val, y_val),
+#                     validation_steps=1)

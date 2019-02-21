@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+
+plt.style.use('seaborn-white')
 from os import walk, path
 
 import SimpleITK as sitk
@@ -36,7 +39,7 @@ def load_dataJSRT(group_name, path, im_shape):
 
             mask = masks[idx]
             mask = np.squeeze(mask)
-            mask = transform.resize(mask, (im_shape, im_shape))
+            mask = transform.resize(mask, (im_shape, im_shape)).astype(bool)
             mask = np.expand_dims(mask, -1)
             y.append(mask)
 
@@ -83,6 +86,43 @@ def load_dicom_2_image(file, output_size, hist_eq=True):
     # im = np.expand_dims(im, axis=0)
     return im
 
+def norm(im):
+    im -= im.mean()
+    im /= np.std(im) + 1e-6
+    return im
+
+def load_data(path, im_shape):
+    """This function loads data from hdf5 file"""
+    X = []
+    y = []
+    with h5py.File(path, "r") as f:
+        img_names = f["img_id/img_id"]
+        images = f["img/img"]
+        masks = f["mask/mask"]
+
+        for idx, name in enumerate(img_names):
+            img = images[idx]
+            img = np.squeeze(img)
+            img = norm(img)
+            img = transform.resize(img, (im_shape, im_shape))
+            X.append(img)
+
+            mask = masks[idx]
+            mask = np.squeeze(mask)
+            mask = transform.resize(mask, (im_shape, im_shape))
+            mask = np.expand_dims(mask, -1)
+            y.append(mask)
+
+    X = np.array(X)
+    y = np.array(y)
+
+    print('### Data loaded')
+    print('\t{}'.format(path))
+    print('\t{}\t{}'.format(X.shape, y.shape))
+    print('\tX:{:.1f}-{:.1f}\ty:{:.1f}-{:.1f}\n'.format(X.min(), X.max(), y.min(), y.max()))
+    print('\tX.mean = {}, X.std = {}'.format(X.mean(), X.std()))
+    return X, y
+
 
 lung_dcm_path = 'D:/dataset/lungseg/lungseg_dcm'
 lung_label_path = 'D:/dataset/lungseg/lungseg_label'
@@ -95,7 +135,7 @@ for (dirpath, dirname, filenames) in walk(lung_label_path):
     label_paths = [path.join(dirpath, n) for n in filenames]
     for index, label in enumerate(label_paths):
         im = imageio.imread(label)
-        im = np.array(im).sum(axis=2).astype(bool).astype(int)
+        im = np.array(im).sum(axis=2).astype(bool)
         im = transform.resize(im, (1024, 1024))
         jialei_masks.append(im)
 
@@ -109,33 +149,79 @@ jialei_dcms = np.expand_dims(np.array(jialei_dcms), -1)
 jialei_masks = np.expand_dims(np.array(jialei_masks), -1)
 jialei_fnames = np.array(jialei_fnames)
 
+# plot 4 pairs of data
+for i in range(1, 5):
+    index = i * 2 - 1
+    plt.subplot(4, 2, index)
+    x = jialei_dcms[i - 1, :, :, :]
+    plt.imshow(x.squeeze())
+
+    index = i * 2
+    plt.subplot(4, 2, index)
+    y = jialei_masks[i - 1, :, :, :]
+    plt.imshow(y.squeeze())
+plt.show()
+
 # load jsrt dataset
-x_jsrt_train, y_jsrt_train, id_jsrt_train = load_dataJSRT("train", "C:/Users/edwardyangxin/Desktop/workprojs/tm_model/jsrt_1k.h5", 1024)
-x_jsrt_test, y_jsrt_test, id_jsrt_test = load_dataJSRT("test", "C:/Users/edwardyangxin/Desktop/workprojs/tm_model/jsrt_1k.h5", 1024)
+x_jsrt_train, y_jsrt_train, id_jsrt_train = load_dataJSRT("train",
+                                                          "C:/Users/edwardyangxin/Desktop/workprojs/tm_model/jsrt_1k.h5",
+                                                          1024)
+x_jsrt_test, y_jsrt_test, id_jsrt_test = load_dataJSRT("test",
+                                                       "C:/Users/edwardyangxin/Desktop/workprojs/tm_model/jsrt_1k.h5",
+                                                       1024)
 
 # ensemble jialei and jsrt dataset
 dcms = np.concatenate((jialei_dcms, x_jsrt_train, x_jsrt_test))
-masks = np.concatenate((jialei_masks, y_jsrt_train, y_jsrt_test))
+masks = np.concatenate((jialei_masks, y_jsrt_train, y_jsrt_test)).astype(bool)
 fnames = np.concatenate((jialei_fnames, id_jsrt_train, id_jsrt_test))
+
+# plot 4 pairs of data
+for i in range(1, 5):
+    index = i * 2 - 1
+    plt.subplot(4, 2, index)
+    x = dcms[i - 1, :, :, :]
+    plt.imshow(x.squeeze())
+
+    index = i * 2
+    plt.subplot(4, 2, index)
+    y = masks[i - 1, :, :, :]
+    plt.imshow(y.squeeze())
+plt.show()
 
 # dcms = jialei_dcms
 # masks = jialei_masks
 # fnames = jialei_fnames
-
+dataset_path = "../dataset/jia_jsrt_1k.hdf5"
 # create h5 groups img\img_id\mask, datasets, add all data into one h5 file
-with h5py.File("../dataset/jia_jsrt_1k.hdf5",'w') as h5f:
+with h5py.File(dataset_path, 'w') as h5f:
     count = dcms.shape[0]
     img_g = h5f.create_group("img")
-    img_d = img_g.create_dataset('img', (count, 1024, 1024, 1), dtype="u2")
+    img_d = img_g.create_dataset('img', (count, 1024, 1024, 1), dtype="float32")
 
     dt = h5py.special_dtype(vlen=str)
     img_id_g = h5f.create_group("img_id")
     img_id_d = img_id_g.create_dataset('img_id', (count,), dtype=dt)
 
     mask_g = h5f.create_group("mask")
-    mask_d = mask_g.create_dataset('mask', (count, 1024, 1024, 1), dtype="u2")
+    mask_d = mask_g.create_dataset('mask', (count, 1024, 1024, 1), dtype="bool")
 
     for index, dcm in enumerate(dcms):
         img_d[index] = dcm
         img_id_d[index] = fnames[index]
         mask_d[index] = masks[index]
+
+# check file and data
+x, y = load_data(dataset_path, 256)
+
+# plot 4 pairs of data
+for i in range(1, 5):
+    index = i * 2 - 1
+    plt.subplot(4, 2, index)
+    xx = x[i - 1, :, :]
+    plt.imshow(xx.squeeze())
+
+    index = i * 2
+    plt.subplot(4, 2, index)
+    yy = y[i - 1, :, :]
+    plt.imshow(yy.squeeze())
+plt.show()
